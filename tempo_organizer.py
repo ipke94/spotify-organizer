@@ -13,7 +13,7 @@ class TempoPlaylist:
 
     def __post_init__(self):
         if not self.name:
-            self.name = f"auto-playlist-by-tempo [{self.low_tempo}, {self.high_tempo}]"
+            self.name = f"Songs within [{self.low_tempo}, {self.high_tempo}] bpm (auto-playlist)"
 
     def is_tempo_in_range(self, tempo: int) -> bool:
         if (self.low_tempo <= tempo) and (tempo <= self.high_tempo):
@@ -101,3 +101,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Uncommment to unfollow (delete) tempo playlists
+    # sp = SpotipyClient()
+    # sp.unfollow_playlists(name_contains="auto-playlist")
