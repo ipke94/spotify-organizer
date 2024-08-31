@@ -1,9 +1,11 @@
 import json
 import logging
+import os
 from itertools import batched
 
 import spotipy
 from dotenv import load_dotenv
+from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
 
 logging.basicConfig(
@@ -21,9 +23,28 @@ class SpotipyClient:
             show_dialog=True,
             cache_path="token.txt",
         )
-        logging.info("Approve OAuth request in browser to complete login.")
         self.sp = spotipy.Spotify(auth_manager=auth_manager)
-        self.current_user_id = self.sp.current_user()["id"]
+
+        try:
+            self.current_user_id = self.sp.current_user()["id"]
+        except SpotifyException as se:
+            if "access token expired" not in str(se):
+                raise SpotifyException(
+                    "The authentication error does not contain 'access token expired'"
+                ) from se
+            else:
+                logging.warning(
+                    "Access token has expired. Approve OAuth request in browser to complete login."
+                )
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                os.remove(os.path.join(current_dir, "token.txt"))
+                auth_manager = SpotifyOAuth(
+                    scope="user-library-read playlist-read-private playlist-modify-public playlist-modify-private",
+                    show_dialog=True,
+                    cache_path="token.txt",
+                )
+                self.sp = spotipy.Spotify(auth_manager=auth_manager)
+                self.current_user_id = self.sp.current_user()["id"]
 
     def get_current_user_playlists(
         self, owned_playlist_only: bool = False, excluded_playlists: list = []
@@ -34,7 +55,8 @@ class SpotipyClient:
             excluded_playlist (list, optional): List of playlist names or IDs to exclude.
 
         Returns:
-            list: Current user's playlists. A playlist has following attributes https://developer.spotify.com/documentation/web-api/reference/get-playlist
+            list: Current user's playlists. A playlist has following attributes
+            https://developer.spotify.com/documentation/web-api/reference/get-playlist
         """
 
         results = self.sp.current_user_playlists()
@@ -99,7 +121,8 @@ class SpotipyClient:
     def unfollow_empty_playlists(self) -> None:
         """
         Spotify API doesn't have an endpoint to delete playlists.
-        Still one can "unfollow" a playlist (even his own!), which has the effect of deleting it from one's Spotify account.
+        Still one can "unfollow" a playlist (even his own!), which has the effect of deleting
+        it from one's Spotify account.
         """
         empty_playlists = [
             playlist
@@ -121,7 +144,8 @@ class SpotipyClient:
             playlist_id (string): Playlist ID that contains tracks.
 
         Returns:
-            list[dict]: List of dictinary that contains tracks (not episodes) in the playlist. Only 'artists', 'id', 'name' and 'type' fields of a track are available in the dict.
+            list[dict]: List of dictinary that contains tracks (not episodes) in the playlist.
+            Only 'artists', 'id', 'name' and 'type' fields of a track are available in the dict.
         """
         results = self.sp.playlist_items(
             playlist_id=playlist_id,
@@ -139,37 +163,42 @@ class SpotipyClient:
         ]
 
         for track in tracks:
-            logging.debug(f"{track['name']} - id: {track['id']}")
+            logging.info(f"{track['name']} - id: {track['id']}")
 
         return tracks
 
-    def get_several_tracks_tempo(self, track_ids: list) -> list[dict]:
+    def get_several_tracks_audio_features(self, track_ids: list) -> list[dict]:
         """
+        Only returns tempo and energy. For full list of audio features see:
+        https://developer.spotify.com/documentation/web-api/reference/get-several-audio-features
+
         Args:
-            track_ids(list[str]): Example ['4ibzxSKw3a6rtIorruN5GO','1wU7z5XE8oa66ZvUlYAKfK', ...]
+            track_ids(list[str]): Example ['6XPYDy3uD7Qp6AWOqwufek','35nOLWeyoXbZvhcczCzQit', ...]
 
         Returns:
-            list[dict]: Example [{'id': '4ibzxSKw3a6rtIorruN5GO', 'tempo': 152}, {'id': '1wU7z5XE8oa66ZvUlYAKfK', 'tempo': 114}, ...]
+            list[dict]: Example [{'id': '6XPYDy3uD7Qp6AWOqwufek', 'tempo': 143, 'energy': 0.968},
+            {'id': '35nOLWeyoXbZvhcczCzQit', 'tempo': 172, 'energy': 0.804}]
         """
 
         batch_size = 100  # limit from https://developer.spotify.com/documentation/web-api/reference/get-several-audio-features
-        tracks_with_tempos = []
+        tracks_with_audio_features = []
         logging.info(f"Retrieving audio features of {len(track_ids)} tracks...")
 
         for track_ids_batch in batched(track_ids, batch_size):
             audio_features = self.sp.audio_features(list(track_ids_batch))
 
-            tracks_with_tempos.extend(
+            tracks_with_audio_features.extend(
                 [
                     {
                         "id": track_audio_features["id"],
                         "tempo": round(track_audio_features["tempo"]),
+                        "energy": track_audio_features["energy"],
                     }
                     for track_audio_features in audio_features
                 ]
             )
 
-        return tracks_with_tempos
+        return tracks_with_audio_features
 
     def add_tracks_to_playlist(self, playlist_id: str, track_ids: list) -> None:
         """
