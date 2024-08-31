@@ -169,15 +169,11 @@ class SpotipyClient:
 
     def get_several_tracks_audio_features(self, track_ids: list) -> list[dict]:
         """
-        Only returns tempo and energy. For full list of audio features see:
+        Only returns tempo, danceability and energy. For full list of audio features see:
         https://developer.spotify.com/documentation/web-api/reference/get-several-audio-features
 
         Args:
             track_ids(list[str]): Example ['6XPYDy3uD7Qp6AWOqwufek','35nOLWeyoXbZvhcczCzQit', ...]
-
-        Returns:
-            list[dict]: Example [{'id': '6XPYDy3uD7Qp6AWOqwufek', 'tempo': 143, 'energy': 0.968},
-            {'id': '35nOLWeyoXbZvhcczCzQit', 'tempo': 172, 'energy': 0.804}]
         """
 
         batch_size = 100  # limit from https://developer.spotify.com/documentation/web-api/reference/get-several-audio-features
@@ -193,6 +189,7 @@ class SpotipyClient:
                         "id": track_audio_features["id"],
                         "tempo": round(track_audio_features["tempo"]),
                         "energy": track_audio_features["energy"],
+                        "danceability": track_audio_features["danceability"],
                     }
                     for track_audio_features in audio_features
                 ]

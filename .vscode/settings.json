@@ -5,7 +5,7 @@
         "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit",
             "source.fixAll": "explicit"
-        }
+        },
     },
     "editor.rulers": [88],
 }

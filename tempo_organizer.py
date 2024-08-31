@@ -29,10 +29,6 @@ class TempoOrganizer:
     start_tempo: int
     end_tempo: int
     increment: int
-    # Spotify tend to show tempo in double time, then even slow songs are over 150 BPM.
-    # This is why I process tempos in half time if the energy < energy_threashold. Still
-    # this is not a perfect measurement.
-    energy_threashold: float = 0.6
     playlists: list[TempoPlaylist] = field(default_factory=list)
     max_tempo: int = 300
 
@@ -45,16 +41,21 @@ class TempoOrganizer:
             self.playlists.append(TempoPlaylist(tempo, tempo + self.increment - 1))
         self.playlists.append(TempoPlaylist(self.end_tempo, self.max_tempo - 1))
 
-    def categorize_track(self, track_id: str, tempo: int, energy: float):
-        """
-        Find where to add the track based on its tempo and energy.
-        """
-        if energy < self.energy_threashold:
+    def categorize_track(
+        self, track_id: str, tempo: int, energy: float, danceability: float
+    ):
+        # Spotify tend to show tempo in double time, then even slow songs are over 150 BPM.
+        # This is why I follow some kind of heuristic. This is not perfect.
+        if (
+            (tempo > 150 and energy < 0.75 and danceability < 0.75)
+            or (tempo > 90 and energy + danceability < 1)
+            or (tempo > 70 and energy < 0.2)
+        ):
             tempo = tempo / 2
 
         if tempo >= self.max_tempo:
             raise ValueError(
-                f"Track tempo is higher than maximum allowed tempo {self.max_tempo}",
+                f"Track tempo is higher than maximum allowed tempo {self.max_tempo}"
             )
 
         for playlist in self.playlists:
@@ -85,6 +86,7 @@ def main():
                 track_id=audio_features["id"],
                 tempo=audio_features["tempo"],
                 energy=audio_features["energy"],
+                danceability=audio_features["danceability"],
             )
 
     # Actual creation of playlists and adding tracks in Spotify:
